@@ -1,12 +1,16 @@
 // data-loader.js
+require('dotenv').config();
 const { MongoClient } = require('mongodb');
 const fs = require('fs');
 const csv = require('csv-parser');
 const path = require('path');
 
-// MongoDB connection details
-const MONGODB_URI = 'mongodb+srv://gauravking918:HAx9nvI81aYkPnEP@customer-order-dashboar.g0hbgrq.mongodb.net/';
-const DATABASE_NAME = 'company_db';
+// MongoDB connection details from environment variables
+const MONGODB_URI = process.env.MONGODB_URI;
+const DATABASE_NAME = process.env.DATABASE_NAME;
+const USERS_COLLECTION = process.env.USERS_COLLECTION || 'users';
+const ORDERS_COLLECTION = process.env.ORDERS_COLLECTION || 'orders';
+const CLEAR_EXISTING_DATA = process.env.CLEAR_EXISTING_DATA === 'true';
 
 class DataLoader {
     constructor() {
@@ -18,10 +22,15 @@ class DataLoader {
     async connect() {
         try {
             console.log('🔌 Connecting to MongoDB...');
+            
+            if (!MONGODB_URI || !DATABASE_NAME) {
+                throw new Error('Missing required environment variables: MONGODB_URI or DATABASE_NAME');
+            }
+            
             this.client = new MongoClient(MONGODB_URI);
             await this.client.connect();
             this.db = this.client.db(DATABASE_NAME);
-            console.log('✅ Connected to MongoDB successfully!');
+            console.log(`✅ Connected to MongoDB database: ${DATABASE_NAME}`);
         } catch (error) {
             console.error('❌ MongoDB connection failed:', error);
             throw error;
@@ -107,7 +116,7 @@ class DataLoader {
             console.log('\n👥 Loading Users Data...');
             
             // Read CSV
-            const usersPath = path.join(__dirname, 'assets', 'users.csv');
+            const usersPath = process.env.USERS_CSV_PATH || path.join(__dirname, 'assets', 'users.csv');
             const rawUserData = await this.readCSV(usersPath);
             
             // Transform data
@@ -115,9 +124,11 @@ class DataLoader {
             console.log(`🔄 Transformed ${transformedUsers.length} user records`);
             
             // Clear existing data (optional)
-            const usersCollection = this.db.collection('users');
-            await usersCollection.deleteMany({});
-            console.log('🗑️  Cleared existing users data');
+            const usersCollection = this.db.collection(USERS_COLLECTION);
+            if (CLEAR_EXISTING_DATA) {
+                await usersCollection.deleteMany({});
+                console.log('🗑️  Cleared existing users data');
+            }
             
             // Insert new data
             const result = await usersCollection.insertMany(transformedUsers);
@@ -136,7 +147,7 @@ class DataLoader {
             console.log('\n📦 Loading Orders Data...');
             
             // Read CSV
-            const ordersPath = path.join(__dirname, 'assets', 'orders.csv');
+            const ordersPath = process.env.ORDERS_CSV_PATH || path.join(__dirname, 'assets', 'orders.csv');
             const rawOrderData = await this.readCSV(ordersPath);
             
             // Transform data
@@ -144,9 +155,11 @@ class DataLoader {
             console.log(`🔄 Transformed ${transformedOrders.length} order records`);
             
             // Clear existing data (optional)
-            const ordersCollection = this.db.collection('orders');
-            await ordersCollection.deleteMany({});
-            console.log('🗑️  Cleared existing orders data');
+            const ordersCollection = this.db.collection(ORDERS_COLLECTION);
+            if (CLEAR_EXISTING_DATA) {
+                await ordersCollection.deleteMany({});
+                console.log('🗑️  Cleared existing orders data');
+            }
             
             // Insert new data
             const result = await ordersCollection.insertMany(transformedOrders);
@@ -164,8 +177,8 @@ class DataLoader {
         try {
             console.log('\n🔍 Creating database indexes...');
             
-            const usersCollection = this.db.collection('users');
-            const ordersCollection = this.db.collection('orders');
+            const usersCollection = this.db.collection(USERS_COLLECTION);
+            const ordersCollection = this.db.collection(ORDERS_COLLECTION);
             
             // Users indexes
             await usersCollection.createIndex({ user_id: 1 }, { unique: true });
@@ -190,8 +203,8 @@ class DataLoader {
         try {
             console.log('\n🔍 Validating data integrity...');
             
-            const usersCollection = this.db.collection('users');
-            const ordersCollection = this.db.collection('orders');
+            const usersCollection = this.db.collection(USERS_COLLECTION);
+            const ordersCollection = this.db.collection(ORDERS_COLLECTION);
             
             // Count documents
             const usersCount = await usersCollection.countDocuments();
@@ -204,7 +217,7 @@ class DataLoader {
             const orphanedOrders = await ordersCollection.aggregate([
                 {
                     $lookup: {
-                        from: 'users',
+                        from: USERS_COLLECTION,
                         localField: 'user_id',
                         foreignField: 'user_id',
                         as: 'user'
