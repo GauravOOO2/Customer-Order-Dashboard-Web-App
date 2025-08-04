@@ -1,26 +1,52 @@
 {
-  "name": "customer-order-dashboard-loader",
+  "name": "customer-order-dashboard-backend",
   "version": "1.0.0",
-  "description": "CSV to MongoDB data loader for Customer Order Dashboard",
-  "main": "data-loader.js",
+  "description": "Backend API for Customer Order Dashboard",
+  "main": "src/server.js",
   "scripts": {
-    "load-data": "node data-loader.js",
-    "test-connection": "node test-connection.js"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "load-data": "node scripts/data-loader.js",
+    "verify-data": "node scripts/verify-data.js"
   },
   "dependencies": {
-    "csv-parser": "^3.2.0",
-    "dotenv": "^17.2.1",
-    "mongodb": "^6.18.0"
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^6.11.2",
+    "express-validator": "^7.2.1",
+    "helmet": "^7.2.0",
+    "http-status": "^1.8.1",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.8.7",
+    "morgan": "^1.10.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.0"
+    "eslint": "^8.47.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.28.1",
+    "jest": "^29.6.2",
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.3"
   },
   "keywords": [
+    "express",
     "mongodb",
-    "csv",
-    "data-loader",
-    "dashboard"
+    "api",
+    "dashboard",
+    "customers",
+    "orders"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
 }
