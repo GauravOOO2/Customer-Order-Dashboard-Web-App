@@ -1,0 +1,25 @@
+{
+  "name": "customer-order-dashboard-loader",
+  "version": "1.0.0",
+  "description": "CSV to MongoDB data loader for Customer Order Dashboard",
+  "main": "data-loader.js",
+  "scripts": {
+    "load-data": "node data-loader.js",
+    "test-connection": "node test-connection.js"
+  },
+  "dependencies": {
+    "csv-parser": "^3.2.0",
+    "mongodb": "^6.18.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "keywords": [
+    "mongodb",
+    "csv",
+    "data-loader",
+    "dashboard"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
