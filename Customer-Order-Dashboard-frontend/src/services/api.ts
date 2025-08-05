@@ -1,105 +1,141 @@
-// src/services/api.ts
-import apiClient from '../config/api';
-import type { ApiResponse } from '../config/api';
-import type {
-  CustomersResponse,
-  CustomerDetailResponse,
-  CustomerStats,
-  OrdersResponse,
-  OrderDetailResponse,
-  CustomerOrdersResponse,
-  OrderStats,
-  CustomerFilters,
-  OrderFilters,
+import type { 
+  ApiResponse, 
+  Customer, 
+  CustomerListResponse, 
+  CustomerFilters, 
+  CustomerStats 
 } from '../types';
 
-// Customer API Services
-export const customerService = {
-  // Get all customers with filters and pagination
-  getCustomers: async (params: CustomerFilters = {}): Promise<ApiResponse<CustomersResponse>> => {
-    const queryParams = new URLSearchParams();
-    
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        queryParams.append(key, value.toString());
-      }
-    });
-    
-    const queryString = queryParams.toString();
-    const url = queryString ? `/customers?${queryString}` : '/customers';
-    
-    return await apiClient.get(url);
-  },
-
-  // Get specific customer by ID
-  getCustomerById: async (id: number, includeOrders: boolean = true): Promise<ApiResponse<CustomerDetailResponse>> => {
-    return await apiClient.get(`/customers/${id}?include_orders=${includeOrders}`);
-  },
-
-  // Get customer statistics
-  getCustomerStats: async (period: string = 'monthly'): Promise<ApiResponse<CustomerStats>> => {
-    return await apiClient.get(`/customers/stats?period=${period}`);
-  },
-
-  // Advanced customer search
-  searchCustomers: async (searchData: any): Promise<ApiResponse<CustomersResponse>> => {
-    return await apiClient.post('/customers/search', searchData);
-  },
+// Configuration
+const API_CONFIG = {
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000',
+  API_VERSION: '/api/v1',
+  TIMEOUT: 10000,
 };
 
-// Order API Services
-export const orderService = {
-  // Get all orders with filters and pagination
-  getOrders: async (params: OrderFilters = {}): Promise<ApiResponse<OrdersResponse>> => {
-    const queryParams = new URLSearchParams();
+class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public errors?: Array<{ field: string; message: string; value?: any }>
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+class ApiService {
+  private baseUrl: string;
+
+  constructor() {
+    this.baseUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.API_VERSION}`;
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseUrl}${endpoint}`;
     
-    Object.entries(params).forEach(([key, value]) => {
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+      
+      const response = await fetch(url, {
+        ...config,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(
+          errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+          response.status,
+          errorData.errors
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new ApiError('Request timeout', 408);
+        }
+        throw new ApiError(error.message, 0);
+      }
+      
+      throw new ApiError('Unknown error occurred', 0);
+    }
+  }
+  // Customer API methods
+  async getCustomers(filters: CustomerFilters = {}): Promise<CustomerListResponse> {
+    const params = new URLSearchParams();
+    
+    Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
-        queryParams.append(key, value.toString());
+        params.append(key, value.toString());
       }
     });
-    
-    const queryString = queryParams.toString();
-    const url = queryString ? `/orders?${queryString}` : '/orders';
-    
-    return await apiClient.get(url);
-  },
 
-  // Get specific order by ID
-  getOrderById: async (id: number, includeCustomer: boolean = true): Promise<ApiResponse<OrderDetailResponse>> => {
-    return await apiClient.get(`/orders/${id}?include_customer=${includeCustomer}`);
-  },
-
-  // Get orders for specific customer
-  getOrdersByCustomer: async (userId: number, params: Partial<OrderFilters> = {}): Promise<ApiResponse<CustomerOrdersResponse>> => {
-    const queryParams = new URLSearchParams();
+    const queryString = params.toString();
+    const endpoint = `/customers${queryString ? `?${queryString}` : ''}`;
     
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        queryParams.append(key, value.toString());
-      }
+    const response = await this.request<CustomerListResponse>(endpoint);
+    return response.data!;
+  }
+
+  async getCustomerById(id: number, includeOrders = false): Promise<Customer> {
+    const params = new URLSearchParams();
+    if (includeOrders) {
+      params.append('include_orders', 'true');
+    }
+    
+    const queryString = params.toString();
+    const endpoint = `/customers/${id}${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await this.request<{ customer: Customer }>(endpoint);
+    return response.data!.customer;
+  }
+
+  async getCustomerStats(): Promise<CustomerStats> {
+    const response = await this.request<CustomerStats>('/customers/stats');
+    return response.data!;
+  }
+
+  async searchCustomers(searchData: {
+    query?: string;
+    filters?: any;
+    sort?: { field: string; order: 'asc' | 'desc' };
+    page?: number;
+    limit?: number;
+  }): Promise<CustomerListResponse> {
+    const response = await this.request<CustomerListResponse>('/customers/search', {
+      method: 'POST',
+      body: JSON.stringify(searchData),
     });
-    
-    const queryString = queryParams.toString();
-    const url = queryString ? `/orders/customer/${userId}?${queryString}` : `/orders/customer/${userId}`;
-    
-    return await apiClient.get(url);
-  },
+    return response.data!;
+  }
 
-  // Get order statistics
-  getOrderStats: async (period: string = 'monthly'): Promise<ApiResponse<OrderStats>> => {
-    return await apiClient.get(`/orders/stats?period=${period}`);
-  },
+  // Health check
+  async healthCheck(): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/health`);
+    return await response.json();
+  }
+}
 
-  // Get order fulfillment analytics
-  getOrderFulfillment: async (): Promise<ApiResponse<any>> => {
-    return await apiClient.get('/orders/fulfillment');
-  },
-};
-
-// Health check service
-export const healthService = {
-  checkHealth: async (): Promise<ApiResponse<any>> => {
-    return await apiClient.get('/health');
-  },
-};
+export const apiService = new ApiService();
+export { ApiError };
